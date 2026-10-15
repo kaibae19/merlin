@@ -1,0 +1,65 @@
+# Copy to merlin.toml (or point MERLIN_CONFIG at it) to change the layout. This is the shipped default.
+exclude = ["**/_template.md"]
+host_types = ["host"]              # front matter `host:` + `aliases:` + `ips:` of these docs define known hosts
+dated_filename_types = ["journal"] # a YYYY-MM-DD in the filename is the doc date
+history_types = ["journal", "host"]
+
+layers = [                         # first match wins; only *.md files are ever indexed
+  { glob = "journal/**",        type = "journal" },
+  { glob = "hosts/*.md",        type = "host" },
+  { glob = "runbooks/**",       type = "runbook" },
+  { glob = "memory/MEMORY.md",  type = "memory-index" },
+  { glob = "memory/*.md",       type = "memory" },
+  { glob = "planning/**",       type = "planning" },
+  { glob = "skills/**",         type = "skill" },
+  { glob = "*.md",              type = "doc" },
+]
+
+# Several git repos as one corpus (optional). Each file is indexed under the virtual path `<name>/<path>`, which
+# the layer globs above then match (e.g. "notes/journal/**"). Without [[repos]], REPO_DIR is the corpus, unprefixed.
+# [[repos]]
+# name = "notes"
+# dir = "/srv/merlin/git/notes.git"     # a bare mirror or a checkout (bare: no --pull)
+
+# Redaction (optional). Patterns for well-known secret shapes always run unless disabled here. Families:
+# private_key, url_credentials, sk_key, vendor_token, jwt, bearer, key_value, hex32.
+# [redact]
+# secret_hashes = "/secrets/hashes"     # salted hashes of the live secrets -> [REDACTED:<name>]; once set, REQUIRED
+# disable = ["hex32"]                   # e.g. a record full of checksums and commit IDs
+
+# [hosts]
+# text_ignore = ["nas"]                 # aliases never matched in text (still valid as a host= filter)
+
+[weights]
+journal = "what was seen on that date: verbatim evidence, may be superseded by later entries"
+host = "current practice: what each host is and how it is set up now"
+runbook = "current practice: how to do it"
+memory = "lessons and gotchas, short, with pointers to the detail"
+memory-index = "the index of lessons"
+planning = "intent: what is planned, not what is done"
+skill = "session procedures for the assistant"
+doc = "orientation and conventions"
+
+[boost]                            # multiplies a chunk's fused (RRF) score by doc type; unlisted types = 1.0
+host = 1.3                         # canonical current practice outranks the journal entry that produced it
+runbook = 1.3
+memory = 1.3
+journal = 1.0
+planning = 0.9
+doc = 0.8
+skill = 0.7
+memory-index = 0.6                 # the index only points at lessons; the lesson itself should win
+
+[recency]                          # tiebreak: score *= 1 + weight * 0.5 ** (age_days / half_life_days)
+weight = 0.05
+half_life_days = 30
+
+[stale]                            # a section that says it is stale: score *= factor
+heading = '(?i)\b(superseded|obsolete)\b'          # anywhere in the section heading
+lead = '(?i)^\W*(superseded|obsolete)\b'           # or opening the section's first line: "(superseded …", "⛔ OBSOLETE"
+factor = 0.5
+# inherit = ["journal"]                            # an overview (day index) above a matched stale section is stale too
+
+# [history]                        # host_history: off by default (plain newest-first)
+# record_chunks = 1                # lead with the host's own record (hosts/<host>.md): its first N chunks, or with a topic its matching ones
+# exclude = ["journal/handoffs/**"]  # leave these out of host_history (e.g. daily summaries that restate other docs)

@@ -1,0 +1,5 @@
+#!/bin/sh
+# Bring the index up to date with the repo. Flags: --pull, --reembed-all, --repo DIR.
+set -eu
+cd "$(dirname "$0")/.."
+exec python -m merlin.ingest "$@"

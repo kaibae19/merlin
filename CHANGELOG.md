@@ -1,0 +1,27 @@
+# Changelog
+
+## 0.1.0 (2026-10-15): first public release
+
+merlin indexes a files-canonical markdown record (journal, host records, runbooks, lessons, plans) for hybrid search
+and serves it to Claude Code as a read-only MCP server. This release contains:
+
+- **Ingest:** one chunk per `##`/`###` section with a context header; host tagging from host-record front matter;
+  section dates from headings, filenames or front matter; incremental by blob sha, with embeddings reused by text
+  hash; warnings for invalid front matter and unbalanced code fences (with recovery).
+- **Several git repos as one corpus** (`[[repos]]`), each indexed under `<name>/<path>`.
+- **Search:** vector + full-text reciprocal-rank fusion (or vector only, `[search] fusion`), reranked by doc-type
+  boost, recency and stale markers, grouped to one section per document with a near-tie pick and `also` headings;
+  `exact=true` for literal strings.
+- **Host history:** one host's sections newest first, optionally led by its own record (`[history] record_chunks`)
+  and with path excludes.
+- **Redaction** before storage and when serving: salted secret hashes (fail closed once configured) plus switchable
+  pattern families.
+- **Freshness verdict** on every result, with a 30-minute grace period for unindexed commits; `index_status`.
+- **Embedding providers:** TEI, OpenAI-compatible, Voyage, Ollama; split document/query backends; a model-identity
+  guard against mixing vectors.
+- **Postgres schema pinning** (`DB_SCHEMA`) with guards against writing into another application's tables.
+- **Retrieval eval** (`merlin.evaluate`): hit@1, hit@3, MRR, with a self-quote guard.
+- **Prometheus textfile metrics** (`METRICS_FILE`).
+- **Integration tests** that refuse a database already holding a merlin index.
+
+Why the ranking and ingest work the way they do: [`docs/design-notes.md`](docs/design-notes.md).

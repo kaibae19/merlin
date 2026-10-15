@@ -1,0 +1,7 @@
+# gitleaks: default rules; the redaction tests are made of deliberately fake secrets.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "fake secrets that test redaction"
+paths = ['''tests/test_redact\.py''']
