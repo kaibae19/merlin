@@ -16,6 +16,9 @@ look things up there (with the source path and date) instead of recalling them:
 - **History per entity.** "What have we already done or hit on X" is a chronological question, so it gets its own
   tool (`history`), not a relevance search.
 - **An empty result is not proof of absence**, and every answer carries an index-freshness verdict.
+- **The record is only as good as what sessions write back.** merlin reads; the assistant writes. A short
+  [session loop](#the-session-loop-keeping-the-record) (look it up first, write it down at the end) is what keeps
+  the record current.
 
 The shipped layout is for infrastructure (the entity is a *host*: journal, host records, runbooks), which is where
 it came from. The layout is configuration: [examples/](examples/) has a software project (components, decisions)
@@ -230,6 +233,35 @@ The index can only rank what the files say. These conventions make the right sec
   beats facts scattered through later sections. Generating that block from a source of truth works well.
 - **Give sections specific headings and, where relevant, a date** (`### Disk full (2030-01-15)`): the heading is
   weighted above the body in full-text search, and the date feeds the recency factor and the near-tie pick.
+
+## The session loop: keeping the record
+
+merlin never writes. The record stays current only because every working session ends by writing what happened
+back into the files, and the next session starts by reading them. In practice that is three habits, written into
+the assistant's instructions file (`CLAUDE.md`) and a wrap-up skill:
+
+1. **At the start:** `index_status`, then the last handoff (what is mid-flight, what is next). Treat it as true when
+   written, not now: check anything live before stating it as current.
+2. **During the work:** look things up before acting. `history(entity=…)` before touching an entity, `search`
+   before answering from memory, and say which document (path + date) an answer came from. When a lookup takes
+   more than one try, note the question, where the answer actually was, and the query that would have found it.
+3. **At the end (wrap-up):**
+   - **Journal** the session in that day's file (append; never rewrite an earlier session): a short index of
+     topics, then per topic what was done, hit, decided and left open, with the **real commands and output**
+     pasted in, trimmed but never paraphrased. Quote people for decisions.
+   - **Update the canonical layers** where the session produced something: the entity's record, the how-to, a
+     short lesson (pointer first), the backlog. Mark what the session made stale `(superseded YYYY-MM-DD: see § X)`
+     instead of deleting it.
+   - **Handoff:** one short paragraph on what is mid-flight and what is next, or "nothing mid-flight".
+   - **Retrieval retrospective:** turn the noted lookups into [eval](#evaluation) cases, phrased as first asked.
+   - **Scan the diff for secrets, then commit.** The next ingest (a timer) indexes it, and the freshness verdict
+     says when it has not yet.
+
+The journal holds the raw evidence because a summary is where mistakes come from: a session that runs long gets
+compacted, and a summary of a summary drifts (wrong person, wrong scope, a fix mistaken for the goal). Evidence
+in the journal, current practice in the records, and a dated pointer between them let both the assistant and the
+person check a claim instead of trusting it. [examples/skills/wrapup/](examples/skills/wrapup/SKILL.md) is a
+generic wrap-up skill to start from.
 
 ## Ingest warnings
 
