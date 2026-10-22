@@ -12,6 +12,8 @@
 - **The session loop** (README): how the record stays current (look up first, journal with real output, update
   the canonical layers, handoff, retrieval retrospective, commit), plus a generic wrap-up skill in
   `examples/skills/wrapup/`.
+- **Using it from Claude Code** (`examples/claude-code/`): a `CLAUDE.md` block, and how the assistant uses the
+  tools day to day, in its own words.
 - **Example layouts** in `examples/`: infrastructure (the default), a software project, a learning record. The
   README now explains the idea before the infrastructure layout.
 

@@ -352,6 +352,9 @@ claude mcp add merlin -- ssh user@index-host \
 session starts a short-lived container. Call `index_status` first in a session, and before trusting that
 something is absent.
 
+What to put in `CLAUDE.md` so the assistant uses the record, and how that looks from the assistant's side:
+[examples/claude-code/](examples/claude-code/README.md).
+
 ## Evaluation
 
 `merlin/evaluate.py` runs a fixed question set through `search()` and reports **hit@1**, **hit@3** and
