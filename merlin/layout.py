@@ -20,6 +20,8 @@ DEFAULT_TOML = r"""
 exclude = ["**/_template.md"]
 dated_filename_types = ["journal"] # a YYYY-MM-DD in the filename is the doc date
 history_types = ["journal", "host"]
+# canonical = ["host", "runbook"]  # types the "when sources disagree" rule names as canonical; default: every type
+                                  # boosted above 1.0 (set it when a boosted type is not canonical, e.g. lessons)
 
 layers = [                         # first match wins; only *.md files are ever indexed
   { glob = "journal/**",        type = "journal" },
@@ -102,6 +104,7 @@ class Layout:
     history_record_chunks: int = 0             # [history] record_chunks: host_history leads with this many chunks of the host's own record
     history_exclude: list[re.Pattern[str]] = field(default_factory=list)   # [history] exclude: globs left out of host_history
     boost: dict[str, float] = field(default_factory=dict)
+    canonical_types: tuple[str, ...] | None = None   # canonical: types the prefer rule names; None = the boosted ones
     recency_weight: float = 0.0
     recency_half_life: float = 30.0
     stale_heading: re.Pattern[str] | None = None
@@ -134,6 +137,9 @@ class Layout:
         name = str(ent.get("name", "host"))
         if not re.fullmatch(r"[a-z][a-z0-9_]*", name):
             raise ValueError(f"[entities] name must be a lowercase identifier, got {name!r}")
+        unknown = set(map(str, d.get("canonical", []))) - {str(l["type"]) for l in d.get("layers", [])}
+        if unknown:
+            raise ValueError(f"canonical names types no layer defines: {sorted(unknown)}")
         return cls(repos=repos,
                    entity_name=name,
                    entity_plural=str(ent.get("plural", name + "s")),
@@ -154,6 +160,7 @@ class Layout:
                    history_record_chunks=int(d.get("history", {}).get("record_chunks", 0)),
                    history_exclude=[glob_to_regex(g) for g in d.get("history", {}).get("exclude", [])],
                    boost={k: float(v) for k, v in d.get("boost", {}).items()},
+                   canonical_types=tuple(map(str, d["canonical"])) if "canonical" in d else None,
                    recency_weight=float(d.get("recency", {}).get("weight", 0.0)),
                    recency_half_life=float(d.get("recency", {}).get("half_life_days", 30.0)),
                    stale_heading=re.compile(d["stale"]["heading"]) if d.get("stale", {}).get("heading") else None,
@@ -192,8 +199,9 @@ class Layout:
         return next((t for rx, t in self.layers if rx.match(path)), None)
 
     def prefer_text(self) -> str:
-        """The "when sources disagree" rule, naming the boosted (canonical) types and the dated (evidence) ones."""
-        canon = [t for t, b in sorted(self.boost.items(), key=lambda kv: -kv[1]) if b > 1.0]
+        """The "when sources disagree" rule, naming the canonical types (default: the boosted ones) and the dated ones."""
+        canon = (list(self.canonical_types) if self.canonical_types is not None
+                 else [t for t, b in sorted(self.boost.items(), key=lambda kv: -kv[1]) if b > 1.0])
         dated = "/".join(self.dated_filename_types)
         example = f" ({'/'.join(canon)} over an old {dated} entry)" if canon and dated else ""
         return f"When sources disagree, prefer the newer and the more canonical{example}, and say so."
