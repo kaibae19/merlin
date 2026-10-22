@@ -1,0 +1,49 @@
+# Layout for one software project: what was tried each day, one record per component, decisions, how-tos, lessons.
+# Copy to merlin.toml (or point MERLIN_CONFIG at it). See README.md next to this file.
+exclude = ["**/_template.md"]
+dated_filename_types = ["journal"]
+history_types = ["journal", "component", "decision"]
+
+layers = [
+  { glob = "journal/**",        type = "journal" },
+  { glob = "components/*.md",   type = "component" },
+  { glob = "decisions/**",      type = "decision" },
+  { glob = "howto/**",          type = "howto" },
+  { glob = "lessons/*.md",      type = "lesson" },
+  { glob = "planning/**",       type = "planning" },
+  { glob = "*.md",              type = "doc" },
+]
+
+corpus = "a files-canonical project record (journal, component records, decisions, how-tos, lessons, planning)"
+
+[entities]
+name = "component"
+types = ["component"]
+alias_fields = ["aliases"]           # other names; a name also matches inside paths (src/billing/x.py)
+
+[weights]
+journal = "what was tried or seen on that date: verbatim evidence (commands, output, errors), may be superseded"
+component = "current state: what the component does, its interfaces, and how it is built now"
+decision = "why it is the way it is: the options weighed and the one chosen, dated; a later decision can replace it"
+howto = "current practice: how to build, release, debug or change it"
+lesson = "lessons and gotchas, short, with pointers to the detail"
+planning = "intent: what is planned, not what is done"
+doc = "orientation and conventions"
+
+[boost]
+component = 1.3
+howto = 1.3
+lesson = 1.3
+decision = 1.1
+journal = 1.0
+planning = 0.9
+doc = 0.8
+
+[recency]
+weight = 0.05
+half_life_days = 30
+
+[stale]
+heading = '(?i)\b(superseded|obsolete)\b'
+lead = '(?i)^\W*(superseded|obsolete)\b'
+factor = 0.5

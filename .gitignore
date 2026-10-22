@@ -1,6 +1,6 @@
 .venv/
 __pycache__/
 .pytest_cache/
-merlin.toml
+/merlin.toml
 *.env
 .env

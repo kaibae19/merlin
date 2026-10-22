@@ -135,8 +135,14 @@ def test_entity_name_must_be_identifier(bad):
         Layout.from_toml(f'[entities]\nname = "{bad}"')
 
 
-@pytest.mark.parametrize("example", sorted((Path(__file__).parent.parent / "examples").glob("*/merlin.toml")),
-                         ids=lambda p: p.parent.name)
+EXAMPLES = sorted((Path(__file__).parent.parent / "examples").glob("*/merlin.toml"))
+
+
+def test_example_layouts_exist():
+    assert {p.parent.name for p in EXAMPLES} >= {"software-project", "learning"}   # not lost to an ignore rule
+
+
+@pytest.mark.parametrize("example", EXAMPLES, ids=lambda p: p.parent.name)
 def test_example_layouts_parse(example):
     t = Layout.from_toml(example.read_text())
     assert t.layers and set(t.host_types) <= {ty for _, ty in t.layers}       # entity records are an indexed type

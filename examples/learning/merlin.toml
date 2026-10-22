@@ -1,0 +1,49 @@
+# Layout for learning a subject: a study log, one record per topic, lessons, sources and open questions.
+# Copy to merlin.toml (or point MERLIN_CONFIG at it). See README.md next to this file.
+exclude = ["**/_template.md"]
+dated_filename_types = ["journal"]
+history_types = ["journal", "topic", "lesson", "question"]
+
+layers = [
+  { glob = "journal/**",        type = "journal" },
+  { glob = "topics/*.md",       type = "topic" },
+  { glob = "lessons/**",        type = "lesson" },
+  { glob = "questions/*.md",    type = "question" },
+  { glob = "sources/*.md",      type = "source" },
+  { glob = "curriculum.md",     type = "planning" },
+  { glob = "*.md",              type = "doc" },
+]
+
+corpus = "a files-canonical study record (journal, topic notes, lessons, open questions, sources, curriculum)"
+
+[entities]
+name = "topic"
+types = ["topic"]
+alias_fields = ["aliases"]
+
+[weights]
+journal = "what was read, tried or asked on that date: verbatim, may be superseded by a later understanding"
+topic = "current understanding of the topic, with the sources that back it"
+lesson = "an explanation written to teach; trust it only as far as the source it cites"
+question = "open questions and known misconceptions: what is NOT settled yet"
+source = "what a book, paper, repo or talk says, and where (page, section, file:line)"
+planning = "the curriculum: intent, not what is learned"
+doc = "orientation and conventions"
+
+[boost]
+topic = 1.3
+source = 1.2
+lesson = 1.1
+question = 1.1
+journal = 1.0
+planning = 0.9
+doc = 0.8
+
+[recency]
+weight = 0.05
+half_life_days = 30
+
+[stale]
+heading = '(?i)\b(superseded|obsolete|wrong)\b'
+lead = '(?i)^\W*(superseded|obsolete|wrong)\b'
+factor = 0.5
