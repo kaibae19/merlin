@@ -258,6 +258,9 @@ def test_mcp_freshness_end_to_end(conn, two_repos, monkeypatch):
     out = mcp_server.search("disk")
     assert out.startswith("index fresh (all repos at their HEAD)\n\n1. [")
     assert mcp_server.list_documents(repo="infra").startswith("index fresh")
+    assert mcp_server.history("alpha").startswith("index fresh")
+    assert mcp_server.host_history("alpha") == mcp_server.history("alpha")          # the legacy alias
+    assert mcp_server.search("disk", host="alpha") == mcp_server.search("disk", entity="alpha")
     (notes / "planning/backlog.md").write_text("# Backlog\n- fresh item\n")
     subprocess.run(["git", "-C", str(notes), "commit", "-qam", "now"], check=True, capture_output=True)
     assert "catching up on commits from the last few minutes: notes (0 min)" in mcp_server.search("disk")

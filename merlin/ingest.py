@@ -123,7 +123,7 @@ def run(conn: psycopg.Connection, repo: str | None, cfg: EmbedConfig, pull: bool
         return config.git("cat-file", "blob", sha, repo=dirs[layout.split(vpath)[0]])
 
     host_docs = {p: read_blob(p, s) for p, s in tree.items() if layout.doc_type(p) in layout.host_types}
-    matcher = HostMatcher.from_host_docs(host_docs, layout.host_text_ignore)
+    matcher = HostMatcher.from_host_docs(host_docs, layout.host_text_ignore, layout.entity_key, layout.entity_alias_fields)
     host_map = json.dumps(matcher.aliases, sort_keys=True)
     host_ignore = json.dumps(sorted(matcher.text_ignore))
     chunk_config = json.dumps({"max_tokens": layout.chunk_max_tokens})

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from merlin.layout import Layout, glob_to_regex
@@ -54,6 +56,8 @@ def test_example_config_is_the_default(layout):
     from pathlib import Path
     example = Layout.from_toml((Path(__file__).parent.parent / "merlin.example.toml").read_text())
     assert example.weights == layout.weights and example.history_types == layout.history_types
+    assert (example.entity_name, example.entity_key, example.entity_alias_fields, example.host_types) == \
+        (layout.entity_name, layout.entity_key, layout.entity_alias_fields, layout.host_types)
     assert [(rx.pattern, t) for rx, t in example.layers] == [(rx.pattern, t) for rx, t in layout.layers]
 
 
@@ -104,3 +108,45 @@ def test_history_section():
     assert lay.history_record_chunks == 1
     assert lay.history_exclude[0].match("notes/journal/handoffs/2026-10-09-morning.md")
     assert not lay.history_exclude[0].match("notes/journal/2026/10/2026-10-09.md")
+
+
+def test_entities_default_is_hosts(layout):
+    assert (layout.entity_name, layout.entity_plural, layout.entity_key) == ("host", "hosts", "host")
+    assert layout.entity_alias_fields == ("aliases", "ips") and layout.host_types == ("host",)
+
+
+def test_entities_custom():
+    t = Layout.from_toml('[entities]\nname = "project"\ntypes = ["project"]\nalias_fields = ["aka"]\n'
+                         'text_ignore = ["Core"]')
+    assert (t.entity_name, t.entity_plural, t.entity_key) == ("project", "projects", "project")
+    assert t.entity_alias_fields == ("aka",) and t.host_types == ("project",)
+    assert t.host_text_ignore == frozenset({"core"})
+    assert Layout.from_toml('[entities]\nname = "person"\nplural = "people"\nkey = "name"').entity_plural == "people"
+
+
+def test_entities_legacy_keys():
+    t = Layout.from_toml('host_types = ["server"]\n[hosts]\ntext_ignore = ["LDAP"]')
+    assert t.host_types == ("server",) and t.host_text_ignore == frozenset({"ldap"}) and t.entity_name == "host"
+
+
+@pytest.mark.parametrize("bad", ["Host", "my host", "1x", ""])
+def test_entity_name_must_be_identifier(bad):
+    with pytest.raises(ValueError):
+        Layout.from_toml(f'[entities]\nname = "{bad}"')
+
+
+@pytest.mark.parametrize("example", sorted((Path(__file__).parent.parent / "examples").glob("*/merlin.toml")),
+                         ids=lambda p: p.parent.name)
+def test_example_layouts_parse(example):
+    t = Layout.from_toml(example.read_text())
+    assert t.layers and set(t.host_types) <= {ty for _, ty in t.layers}       # entity records are an indexed type
+    assert set(t.history_types) <= {ty for _, ty in t.layers}
+    assert set(t.weights) == {ty for _, ty in t.layers}                       # every type tells the model how to weigh it
+
+
+def test_prefer_text_follows_boost(layout):
+    assert "(host/runbook/memory over an old journal entry)" in layout.prefer_text()
+    t = Layout.from_toml('dated_filename_types = ["journal"]\n[boost]\ntopic = 1.3\nsource = 1.2\njournal = 1.0')
+    assert "(topic/source over an old journal entry)" in t.prefer_text()
+    assert Layout.from_toml("[boost]\njournal = 1.0").prefer_text() == \
+        "When sources disagree, prefer the newer and the more canonical, and say so."

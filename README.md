@@ -1,9 +1,25 @@
 # merlin
 
 The memory and search layer for a **files-canonical Claude Code working partner**. The partner keeps its record as
-plain markdown in git: a daily journal of what was actually seen, host records, runbooks, short lessons and plans.
-merlin indexes that record for **hybrid search** (semantic plus full-text) and **host history**, and serves
-both to Claude Code as a read-only MCP server.
+plain markdown in git: a daily journal of what was actually seen, one record per thing the work is about, how-tos,
+short lessons and plans. merlin indexes that record for **hybrid search** (semantic plus full-text) and
+**per-entity history**, and serves both to Claude Code as a read-only MCP server.
+
+It exists because an assistant's memory is the weak point. A session only knows what is in its context; a long one
+gets compacted into a summary, and whatever the summary dropped gets filled in with something plausible. merlin's
+answer is to keep the memory outside the model, in files a person can read and correct, and to make the assistant
+look things up there (with the source path and date) instead of recalling them:
+
+- **Evidence and current practice are different types.** A journal entry says what was seen on a date; a record or
+  how-to says how things are now. The tools tell the model which is which, rank the canonical one higher, and
+  demote sections marked superseded.
+- **History per entity.** "What have we already done or hit on X" is a chronological question, so it gets its own
+  tool (`history`), not a relevance search.
+- **An empty result is not proof of absence**, and every answer carries an index-freshness verdict.
+
+The shipped layout is for infrastructure (the entity is a *host*: journal, host records, runbooks), which is where
+it came from. The layout is configuration: [examples/](examples/) has a software project (components, decisions)
+and a learning record (topics, lessons, open questions).
 
 merlin grew out of the memory engine of Anna, a personal assistant project.
 
@@ -18,15 +34,16 @@ Nothing is ever written only to the database: no notes, no edits, no state you w
  runbooks/ memory/          blobs → redact secrets → chunk by ##/###          chunks (heading, body, hosts[], date,
  planning/ skills/          → embed (reusing vectors by text sha)                     vector, tsvector)
                                                                                    │
- Claude Code ◄── stdio (over ssh) ── mcp_server: search · host_history ◄───────────┘
+ Claude Code ◄── stdio (over ssh) ── mcp_server: search · history ◄────────────────┘
                                      get_document · list_documents · index_status
 ```
 
 - **Chunking** (`chunk.py`). One chunk per `##`/`###` section, never split inside a code fence. A section over
   about 1,500 tokens is split at paragraph boundaries. Each chunk's embedded text starts with a context header,
   `[type] path > H1 > H2 > H3`, so a section called "Verify" still says which runbook it belongs to.
-  - **Hosts**: the `host:` front matter field, plus any mention of a known host, alias or IP. The known hosts
-    come from the front matter of the host records.
+  - **Entities** (hosts by default): the record's own front matter key (`host:`), plus any mention of a known
+    entity's name or alias (for hosts, also IPs). The known entities come from the front matter of their records;
+    see [Entities](#entities).
   - **Dates**: the filename date for the journal, else a front matter `date`/`updated`/`created`, else the
     file's last commit date. A section takes the date from its own heading when it has one, such as
     `## 2030-01-16 (session 2)` or `### Disk full (2030-01-15)`.
@@ -42,17 +59,18 @@ Nothing is ever written only to the database: no notes, no edits, no state you w
   - The run records `head_sha`, `last_ingest_at` and the counts in `meta`.
 - **Search** (`search.py`) fuses a vector top-N (HNSW cosine) with Postgres full-text search
   (`websearch_to_tsquery` + `ts_rank_cd`, headings weighted above bodies) by reciprocal-rank fusion (k = 60).
-  - Filters: type, host (an alias works too), and since/until, matched against the section's date.
+  - Filters: type, entity (an alias works too), and since/until, matched against the section's date.
   - The fused scores are then reranked by doc type, recency and stale markers, and grouped to one section per
     document, naming the document's other matching sections. See [Ranking](#ranking).
   - Filtered vector scans use `hnsw.iterative_scan = relaxed_order` with a raised `ef_search`, so a filter
     can't starve the result.
   - `exact=true` drops the embedding and fuses a literal `ILIKE` with full-text search. Use it for error
     strings, paths and IDs.
-- **Host history** returns one host's journal sections and host-record notes **newest first**, by date rather
-  than by relevance. Use it to read "what have we already done or hit on this host" before running a procedure
-  there. With `topic=`, it keeps the best hybrid matches within that host and still returns them in date order.
-  Undated host-record sections carry the file's commit date, so the current record sorts above the evidence.
+- **History** (`history(entity=…)`) returns every section that mentions one entity, in the `history_types` docs,
+  **newest first**, by date rather than by relevance. Use it to read "what have we already done or hit on this
+  host" before running a procedure there. With `topic=`, it keeps the best hybrid matches within that entity and
+  still returns them in date order. Undated sections of the entity's own record carry the file's commit date, so
+  the current record sorts above the evidence.
 
 ## Doc types and how to weigh them
 
@@ -70,9 +88,36 @@ weigh each type:
 
 The tool descriptions also say that **an empty result is not proof of absence**.
 
-To use a different layout, copy `merlin.example.toml` to `merlin.toml`, or point `MERLIN_CONFIG` at your copy.
-It holds the glob → type rules (first match wins), the per-type weighting text, which types define hosts, which
-types take their date from the filename, and which types feed `host_history`.
+To use a different layout, copy `merlin.example.toml` (or one of [examples/](examples/)) to `merlin.toml`, or point
+`MERLIN_CONFIG` at your copy. It holds the glob → type rules (first match wins), the per-type weighting text, the
+entities, which types take their date from the filename, and which types feed `history`.
+
+| Example | Entity | Types |
+|---|---|---|
+| [infrastructure](examples/infrastructure/) (the default) | host | journal, host, runbook, memory, planning, skill, doc |
+| [software-project](examples/software-project/) | component | journal, component, decision, howto, lesson, planning, doc |
+| [learning](examples/learning/) | topic | journal, topic, lesson, question, source, planning, doc |
+
+### Entities
+
+An entity is one of the things the record is about: a host, a component, a topic, a client, a person. Each has one
+record (a document of an entity type), whose front matter gives its canonical name and aliases. Ingest then tags
+every section that mentions any of those names with the entity, so search can filter on it and `history` can follow
+it through the journal.
+
+```toml
+[entities]
+name = "component"                 # what one is called; the tool descriptions and result labels use it
+types = ["component"]              # docs of these types each define one entity
+key = "component"                  # front matter field with the canonical name (default: the same as name)
+alias_fields = ["aliases"]         # front matter lists of other names for it
+# plural = "components"            # default: name + "s"
+# text_ignore = ["core"]           # aliases never matched in body text (an alias that is also a common word)
+```
+
+The default is `name = "host"`, `types = ["host"]`, `alias_fields = ["aliases", "ips"]`. With `name = "host"`, the
+MCP server also keeps the original `host_history(host=…)` tool and the `host=` search filter as aliases. Older
+layouts with a top-level `host_types` and a `[hosts] text_ignore` still load.
 
 ### Several repos as one corpus
 
@@ -90,14 +135,14 @@ dir = "/srv/merlin/git/infra.git"
 Each file is then indexed under the virtual path `<name>/<path>` (`infra/hosts/db1.md`). That is what the layer
 globs match (`{ glob = "infra/hosts/*.md", type = "host" }`), what search returns, and what `get_document` takes
 (or `repo=` plus the path inside it). `search` gains `repos=[…]`, `list_documents` gains `repo=`, and
-`index_status` reports each repo's indexed and current HEAD. Host records in any repo tag mentions in all of them.
+`index_status` reports each repo's indexed and current HEAD. Entity records in any repo tag mentions in all of them.
 Every repo is listed before anything is written, so a repo that cannot be read stops the run instead of having its
 documents deleted. Without `[[repos]]`, `REPO_DIR` is the corpus and paths carry no prefix. Adding `[[repos]]` to an
 existing index changes every path, so every document is re-indexed once.
 
 ## Index freshness
 
-Every `search`, `host_history` and `list_documents` result starts with one verdict line, and `index_status` adds the
+Every `search`, `history` and `list_documents` result starts with one verdict line, and `index_status` adds the
 per-repo detail (indexed vs current HEAD, last ingest, model, counts):
 
 | Verdict | When |
@@ -164,7 +209,7 @@ from 57% to 70%, and section-level grouping raised it to 74% (see [design notes]
 factor to 1.0 or a weight to 0 to switch a step off. Measure every change with the [evaluation](#evaluation)
 before and after: try overrides with `--boost` and `--recency` first, then write the winner to `merlin.toml`.
 Prefer moderate values. On a small case set, a stronger boost that scores slightly higher is usually
-overfitting. `NEAR_TIE` and `ALSO` are constants in `search.py`, not layout keys. `host_history` does not rerank:
+overfitting. `NEAR_TIE` and `ALSO` are constants in `search.py`, not layout keys. `history` does not rerank:
 it is ordered by date.
 
 ## Corpus conventions that help retrieval
@@ -176,8 +221,8 @@ The index can only rank what the files say. These conventions make the right sec
   mention of "superseded" further down the body doesn't count, deliberately. (Conversely, a heading such as "Why the
   old plan was superseded" does count.) Pointing at the replacement (`see § X`) lets the reader follow it.
 - **Keep front matter valid YAML.** Quote any value that contains `: ` (for example
-  `description: "fix: restart the agent"`). Invalid front matter is ignored as a whole, so a host record silently
-  loses its `aliases:` and `ips:` and its host tagging. Ingest now warns about it.
+  `description: "fix: restart the agent"`). Invalid front matter is ignored as a whole, so an entity record
+  silently loses its aliases and its tagging. Ingest now warns about it.
 - **Balance code fences.** One unclosed fence inverts every later fence in the file. Ingest recovers (see below)
   and warns, but fix the file. Note that `` ``` `` and `~~~` both toggle the fence state.
 - **Put the summary at the top of a document.** The first section of a host record or runbook is what a "what
@@ -192,11 +237,11 @@ Ingest prints these to stderr and indexes the document anyway:
 
 | Warning | Cause | Effect if ignored |
 |---|---|---|
-| `front matter is not valid YAML (quote values containing ': '); its fields are ignored` | the `---` block doesn't parse | no `host:`, `aliases:`, `ips:`, `date:` from that file |
+| `front matter is not valid YAML (quote values containing ': '); its fields are ignored` | the `---` block doesn't parse | no entity name, aliases or `date:` from that file |
 | `code fences don't balance (last unmatched opener at body line N); recovered at ##/### headings` | an odd number of fence lines | recovered: inside an unbalanced document, a `##`/`###` line ends a "fence"; balanced documents are untouched, so they may still quote markdown headings inside code blocks |
 
 Before the recovery, a single unclosed fence in a long journal file merged hundreds of lines into one chunk, with
-the wrong heading and the union of every host mentioned; that chunk matched almost every query.
+the wrong heading and the union of every entity mentioned; that chunk matched almost every query.
 
 ## Configuration (environment)
 

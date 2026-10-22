@@ -18,7 +18,6 @@ from pathlib import Path
 
 DEFAULT_TOML = r"""
 exclude = ["**/_template.md"]
-host_types = ["host"]              # front matter `host:` + `aliases:` + `ips:` of these docs define known hosts
 dated_filename_types = ["journal"] # a YYYY-MM-DD in the filename is the doc date
 history_types = ["journal", "host"]
 
@@ -32,6 +31,12 @@ layers = [                         # first match wins; only *.md files are ever 
   { glob = "skills/**",         type = "skill" },
   { glob = "*.md",              type = "doc" },
 ]
+
+[entities]                         # the things the record is about; history(entity) and the entity= filter use them
+name = "host"                      # what one is called (tool text and result labels); "host" also keeps host_history
+types = ["host"]                   # docs of these types each define one entity, from their front matter:
+key = "host"                       #   the canonical name (default: the same as name)
+alias_fields = ["aliases", "ips"]  #   other names that mean the same entity (lists)
 
 [weights]
 journal = "what was seen on that date: verbatim evidence, may be superseded by later entries"
@@ -87,7 +92,11 @@ class Layout:
     layers: list[tuple[re.Pattern[str], str]]
     exclude: list[re.Pattern[str]]
     weights: dict[str, str] = field(default_factory=dict)
-    host_types: tuple[str, ...] = ("host",)
+    host_types: tuple[str, ...] = ("host",)    # [entities] types: docs whose front matter defines entities
+    entity_name: str = "host"                  # [entities] name: what an entity is called
+    entity_plural: str = "hosts"               # [entities] plural
+    entity_key: str = "host"                   # [entities] key: front-matter field with the canonical name
+    entity_alias_fields: tuple[str, ...] = ("aliases", "ips")   # [entities] alias_fields
     dated_filename_types: tuple[str, ...] = ("journal",)
     history_types: tuple[str, ...] = ("journal", "host")
     history_record_chunks: int = 0             # [history] record_chunks: host_history leads with this many chunks of the host's own record
@@ -102,7 +111,7 @@ class Layout:
     repos: tuple[tuple[str, str], ...] = ()   # (name, git dir); empty = the single REPO_DIR, paths unprefixed
     secret_hashes: str | None = None          # [redact] salted-hash file of live secrets; set = required
     redact_disable: frozenset[str] = frozenset()   # [redact] pattern families turned off
-    host_text_ignore: frozenset[str] = frozenset()  # [hosts] text_ignore: aliases never matched in body text
+    host_text_ignore: frozenset[str] = frozenset()  # [entities] text_ignore: aliases never matched in body text
     chunk_max_tokens: int = 1500               # [chunk] max_tokens: a section longer than this is split
     search_fusion: str = "hybrid"              # [search] fusion: "hybrid" (vector + full-text, RRF) or "vector"
     corpus: str = "a files-canonical record (journal, host records, runbooks, lessons, planning)"   # shown to the model
@@ -120,17 +129,26 @@ class Layout:
         fusion = str(d.get("search", {}).get("fusion", "hybrid"))
         if fusion not in ("hybrid", "vector"):
             raise ValueError(f'[search] fusion must be "hybrid" or "vector", got {fusion!r}')
+        ent = d.get("entities", {})
+        legacy = d.get("hosts", {})          # before [entities]: top-level host_types + [hosts] text_ignore
+        name = str(ent.get("name", "host"))
+        if not re.fullmatch(r"[a-z][a-z0-9_]*", name):
+            raise ValueError(f"[entities] name must be a lowercase identifier, got {name!r}")
         return cls(repos=repos,
+                   entity_name=name,
+                   entity_plural=str(ent.get("plural", name + "s")),
+                   entity_key=str(ent.get("key", name)),
+                   entity_alias_fields=tuple(map(str, ent.get("alias_fields", ["aliases", "ips"]))),
                    chunk_max_tokens=int(d.get("chunk", {}).get("max_tokens", 1500)),
                    search_fusion=fusion,
                    **({"corpus": str(d["corpus"])} if d.get("corpus") else {}),
-                   host_text_ignore=frozenset(str(n).lower() for n in d.get("hosts", {}).get("text_ignore", [])),
+                   host_text_ignore=frozenset(str(n).lower() for n in ent.get("text_ignore", legacy.get("text_ignore", []))),
                    secret_hashes=str(red["secret_hashes"]) if red.get("secret_hashes") else None,
                    redact_disable=frozenset(map(str, red.get("disable", []))),
                    layers=[(glob_to_regex(l["glob"]), l["type"]) for l in d.get("layers", [])],
                    exclude=[glob_to_regex(g) for g in d.get("exclude", [])],
                    weights=dict(d.get("weights", {})),
-                   host_types=tuple(d.get("host_types", ["host"])),
+                   host_types=tuple(ent.get("types", d.get("host_types", ["host"]))),
                    dated_filename_types=tuple(d.get("dated_filename_types", ["journal"])),
                    history_types=tuple(d.get("history_types", ["journal", "host"])),
                    history_record_chunks=int(d.get("history", {}).get("record_chunks", 0)),
@@ -172,6 +190,13 @@ class Layout:
         if not path.lower().endswith(".md") or any(x.match(path) for x in self.exclude):
             return None
         return next((t for rx, t in self.layers if rx.match(path)), None)
+
+    def prefer_text(self) -> str:
+        """The "when sources disagree" rule, naming the boosted (canonical) types and the dated (evidence) ones."""
+        canon = [t for t, b in sorted(self.boost.items(), key=lambda kv: -kv[1]) if b > 1.0]
+        dated = "/".join(self.dated_filename_types)
+        example = f" ({'/'.join(canon)} over an old {dated} entry)" if canon and dated else ""
+        return f"When sources disagree, prefer the newer and the more canonical{example}, and say so."
 
     def weighting_text(self) -> str:
         """One line per type, for MCP tool descriptions."""

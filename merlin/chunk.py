@@ -78,7 +78,7 @@ def _as_date(v: object) -> date | None:
 
 
 class HostMatcher:
-    """Finds mentions of known hosts (names, aliases, IPs) and maps them to the canonical host name."""
+    """Finds mentions of known entities (hosts by default: names, aliases, IPs) and maps them to the canonical name."""
 
     def __init__(self, aliases: dict[str, str], text_ignore: frozenset[str] | set[str] = frozenset()):
         self.aliases = {k.lower(): v for k, v in aliases.items()}
@@ -89,21 +89,25 @@ class HostMatcher:
                       if alts else None)
 
     @classmethod
-    def from_host_docs(cls, docs: dict[str, str], text_ignore: frozenset[str] | set[str] = frozenset()) -> "HostMatcher":
-        """Build from {path: text} of hosts/*.md, using front matter host, aliases and ips."""
+    def from_host_docs(cls, docs: dict[str, str], text_ignore: frozenset[str] | set[str] = frozenset(),
+                       key: str = "host", alias_fields: tuple[str, ...] = ("aliases", "ips")) -> "HostMatcher":
+        """Build from {path: text} of the entity records (hosts/*.md by default): front matter `key` is the canonical
+        name, each of `alias_fields` a list of other names for it."""
         aliases: dict[str, str] = {}
         for text in docs.values():
             fm, _, _ = parse_front_matter(text)
-            host = str(fm.get("host") or "").strip()
+            host = str(fm.get(key) or "").strip()
             if not host or host.startswith("<"):
                 continue
             aliases[host] = host
-            for a in (fm.get("aliases") or []) + (fm.get("ips") or []):
-                aliases[str(a)] = host
+            for f in alias_fields:
+                v = fm.get(f) or []
+                for a in ([v] if isinstance(v, (str, int, float)) else v):
+                    aliases[str(a)] = host
         return cls(aliases, text_ignore)
 
     def find(self, text: str) -> set[str]:
-        """Canonical names of every host mentioned in text."""
+        """Canonical names of every entity mentioned in text."""
         if not self.regex:
             return set()
         return {self.aliases[m.group(1).lower()] for m in self.regex.finditer(text)}

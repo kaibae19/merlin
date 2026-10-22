@@ -133,3 +133,12 @@ def test_invalid_front_matter_warns(matcher, layout):
     doc = chunk_document("hosts/gamma.md", text, matcher, layout=layout)
     assert doc.warnings and "not valid YAML" in doc.warnings[0]
     assert all("gamma" not in c.hosts for c in doc.chunks)     # host field ignored, as before
+
+
+def test_matcher_custom_key_and_alias_fields():
+    docs = {"projects/atlas.md": "---\nname: atlas\naka: [Project Atlas, ATL]\n---\n# Atlas\n",
+            "projects/solo.md": "---\nname: solo\naka: Solo-1\n---\n"}
+    m = HostMatcher.from_host_docs(docs, key="name", alias_fields=("aka",))
+    assert m.find("the Project Atlas kickoff, then ATL and solo-1") == {"atlas", "solo"}
+    assert m.find("edited src/atlas/main.py") == {"atlas"}                 # a name matches inside a path
+    assert HostMatcher.from_host_docs(docs).aliases == {}                     # default key "host": none defined

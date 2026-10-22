@@ -1,6 +1,5 @@
 # Copy to merlin.toml (or point MERLIN_CONFIG at it) to change the layout. This is the shipped default.
 exclude = ["**/_template.md"]
-host_types = ["host"]              # front matter `host:` + `aliases:` + `ips:` of these docs define known hosts
 dated_filename_types = ["journal"] # a YYYY-MM-DD in the filename is the doc date
 history_types = ["journal", "host"]
 
@@ -15,6 +14,14 @@ layers = [                         # first match wins; only *.md files are ever 
   { glob = "*.md",              type = "doc" },
 ]
 
+[entities]                         # the things the record is about; history(entity) and the entity= filter use them
+name = "host"                      # what one is called (tool text and result labels); "host" also keeps host_history
+types = ["host"]                   # docs of these types each define one entity, from their front matter:
+key = "host"                       #   the canonical name (default: the same as name)
+alias_fields = ["aliases", "ips"]  #   other names that mean the same entity (lists)
+# plural = "hosts"                 # default: name + "s"
+# text_ignore = ["nas"]            # aliases never matched in body text (still valid as an entity= filter)
+
 # Several git repos as one corpus (optional). Each file is indexed under the virtual path `<name>/<path>`, which
 # the layer globs above then match (e.g. "notes/journal/**"). Without [[repos]], REPO_DIR is the corpus, unprefixed.
 # [[repos]]
@@ -26,9 +33,6 @@ layers = [                         # first match wins; only *.md files are ever 
 # [redact]
 # secret_hashes = "/secrets/hashes"     # salted hashes of the live secrets -> [REDACTED:<name>]; once set, REQUIRED
 # disable = ["hex32"]                   # e.g. a record full of checksums and commit IDs
-
-# [hosts]
-# text_ignore = ["nas"]                 # aliases never matched in text (still valid as a host= filter)
 
 [weights]
 journal = "what was seen on that date: verbatim evidence, may be superseded by later entries"

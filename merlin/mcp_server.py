@@ -23,11 +23,14 @@ LAYOUT = load_layout()
 check_redaction(LAYOUT)          # fail closed: no server without the configured secret hashes
 GUIDE = f"""How to weigh results by doc type:
 {LAYOUT.weighting_text()}
-When sources disagree, prefer the newer and the more canonical (host/runbook over an old journal entry), and say so.
+{LAYOUT.prefer_text()}
 Say which document (path + date) an answer came from. [REDACTED:<name>] marks a live secret removed at index time,
 [REDACTED] a secret-shaped string; never try to recover either.
 An empty or weak result is NOT proof that something is absent or never happened: rephrase, try exact=true for
 literal strings, or widen the filters before concluding a negative."""
+
+ENT, ENTS = LAYOUT.entity_name, LAYOUT.entity_plural
+LEGACY_HOST = ENT == "host"      # the original vocabulary: also serve host_history and search(host=) for older prompts
 
 REPOS_DOC = (f"\nrepos: limit to these repos ({', '.join(n for n, _ in LAYOUT.repos)}); paths are <repo>/<path>."
              if LAYOUT.repos else "")
@@ -67,10 +70,10 @@ def excerpt(body: str, query: str | None = None, size: int = EXCERPT) -> str:
 
 
 def format_hit(n: int, h: Hit, query: str | None = None) -> str:
-    """One result block: type, path, date, heading, hosts, score, excerpt."""
+    """One result block: type, path, date, heading, entities, score, excerpt."""
     when = h.chunk_date or h.doc_date or "undated"
     more = f" (+{h.more} more in this doc)" if h.more else ""
-    hosts = f" · hosts: {', '.join(h.hosts)}" if h.hosts else ""
+    hosts = f" · {ENTS}: {', '.join(h.hosts)}" if h.hosts else ""
     score = f" · score {h.score:.4f}" if h.score else ""
     also = f"   also: {' · '.join('§ ' + a for a in h.also)}\n" if h.also else ""
     return (f"{n}. [{h.type}] {h.path} · {when}{score}{more}\n"
@@ -83,33 +86,67 @@ def _fmt(hits: list[Hit], query: str | None, empty: str) -> str:
     return freshness_line() + "\n\n" + body
 
 
-@server.tool(description=f"""Hybrid search (semantic + full-text, fused by RRF) over {LAYOUT.corpus}.
+SEARCH_DOC = f"""Hybrid search (semantic + full-text, fused by RRF) over {LAYOUT.corpus}.
 Returns the best section per document (a newer section wins a near-tie; sections marked superseded/obsolete rank
-lower) with type, path, date, heading, hosts, score, an excerpt, and the other matching sections' headings.
-types: filter by doc type ({', '.join(LAYOUT.weights)}). host: a host name or alias. since/until: YYYY-MM-DD,
+lower) with type, path, date, heading, {ENTS}, score, an excerpt, and the other matching sections' headings.
+types: filter by doc type ({', '.join(LAYOUT.weights)}). entity: a {ENT} name or alias{" (host= is the same)" if LEGACY_HOST else ""}. since/until: YYYY-MM-DD,
 matched against the section's date. exact=true: literal + full-text only, for error strings, paths, IDs.
 per_document=false: raw sections (several per document) instead of the best one per document.{REPOS_DOC}
-{GUIDE}""")
-@clear_errors
-def search(query: str, types: list[str] | None = None, host: str | None = None, since: str | None = None,
-           until: str | None = None, k: int = 8, exact: bool = False, repos: list[str] | None = None,
-           per_document: bool = True) -> str:
-    """Search tool."""
-    hits = _search(db(), query, types, host, since, until, k=max(1, min(k, 30)), exact=exact, repos=repos,
+{GUIDE}"""
+
+HISTORY_DOC = f"""What has been seen and done on one {ENT}, NEWEST FIRST (chronological, not semantic): every section
+that mentions it in {', '.join(LAYOUT.history_types)} docs, its own record included. Read this before working on a {ENT},
+so recorded traps are read before they are re-hit. entity: a {ENT} name or alias. topic: keep only the sections that
+best match it (still newest first).
+{GUIDE}"""
+
+
+def _search_impl(query: str, types: list[str] | None, entity: str | None, since: str | None, until: str | None,
+                 k: int, exact: bool, repos: list[str] | None, per_document: bool) -> str:
+    hits = _search(db(), query, types, entity, since, until, k=max(1, min(k, 30)), exact=exact, repos=repos,
                    per_document=per_document)
     return _fmt(hits, query if exact else None,
                 "No results. Not proof of absence: rephrase, try exact=true, or drop filters.")
 
 
-@server.tool(description=f"""What has been seen and done on one host, NEWEST FIRST (chronological, not
-semantic): its journal sections and host-record notes. Read this before any procedure on a host, so recorded
-traps are read before they are re-hit. topic: keep only the sections that best match it (still newest first).
-{GUIDE}""")
+def _history_impl(entity: str, since: str | None, topic: str | None) -> str:
+    hits = _host_history(db(), entity, since=since, topic=topic)
+    return _fmt(hits, None, f"No history for {entity!r}. Check the name/alias with list_documents(types="
+                            f"{list(LAYOUT.host_types)!r}).")
+
+
+if LEGACY_HOST:
+    @server.tool(description=SEARCH_DOC)
+    @clear_errors
+    def search(query: str, types: list[str] | None = None, entity: str | None = None, since: str | None = None,
+               until: str | None = None, k: int = 8, exact: bool = False, repos: list[str] | None = None,
+               per_document: bool = True, host: str | None = None) -> str:
+        """Search tool (host= kept as an alias of entity=)."""
+        return _search_impl(query, types, entity or host, since, until, k, exact, repos, per_document)
+else:
+    @server.tool(description=SEARCH_DOC)
+    @clear_errors
+    def search(query: str, types: list[str] | None = None, entity: str | None = None, since: str | None = None,
+               until: str | None = None, k: int = 8, exact: bool = False, repos: list[str] | None = None,
+               per_document: bool = True) -> str:
+        """Search tool."""
+        return _search_impl(query, types, entity, since, until, k, exact, repos, per_document)
+
+
+@server.tool(description=HISTORY_DOC)
 @clear_errors
-def host_history(host: str, since: str | None = None, topic: str | None = None) -> str:
-    """Host history tool."""
-    hits = _host_history(db(), host, since=since, topic=topic)
-    return _fmt(hits, None, f"No history for {host!r}. Check the name/alias with list_documents(type='host').")
+def history(entity: str, since: str | None = None, topic: str | None = None) -> str:
+    """Entity history tool."""
+    return _history_impl(entity, since, topic)
+
+
+if LEGACY_HOST:
+    @server.tool(description="The same as history(entity=host): one host's sections, newest first. Kept for prompts "
+                             "written before history() existed.")
+    @clear_errors
+    def host_history(host: str, since: str | None = None, topic: str | None = None) -> str:
+        """Host history tool (alias of history)."""
+        return _history_impl(host, since, topic)
 
 
 @server.tool(description="The full text of one indexed document by its path as search shows it (secrets "

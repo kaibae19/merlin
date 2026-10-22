@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- **Entities** generalize hosts: `[entities]` sets what the record's things are called (`name`), which doc types
+  define them, the front matter key and alias fields. The default stays `host` with `aliases` + `ips`; the old
+  top-level `host_types` and `[hosts] text_ignore` still load.
+- **`history(entity=…)`** and the `entity=` search filter. With `name = "host"`, `host_history(host=…)` and
+  `search(host=…)` stay as aliases. Eval cases take `entity:` (`host:` still works).
+- The "prefer the more canonical source" rule in the MCP instructions names the layout's boosted types instead of
+  a hardcoded host/runbook.
+- **Example layouts** in `examples/`: infrastructure (the default), a software project, a learning record. The
+  README now explains the idea before the infrastructure layout.
+
 ## 0.1.0 (2026-10-15): first public release
 
 merlin indexes a files-canonical markdown record (journal, host records, runbooks, lessons, plans) for hybrid search

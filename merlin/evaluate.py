@@ -3,7 +3,7 @@
 Cases live in the corpus repo (YAML: `cases: [{q, expect: [{path, heading?}]}]`), because what counts as the right
 answer is a fact about the corpus, not the code. A result counts if its path matches and, when `heading` is given,
 the shown section heading contains it (case-insensitive). Optional per case:
-  host: + topic:   run host_history(host, topic) instead of search(q); q is then just the label
+  entity: + topic: run history(entity, topic) instead of search(q); q is then just the label (host: = entity:)
   stale: [...]     outdated docs (same form as expect); "newer wins" if an expected answer ranks above all of them
 Run after every ingest or ranking change:
 
@@ -110,8 +110,8 @@ def run(conn, cases: list[dict], k: int = 10, layout=None) -> list[Result]:
 
     out = []
     for c in cases:
-        if c.get("host"):
-            hits = host_history(conn, c["host"], topic=c.get("topic"), limit=k, layout=layout)
+        if c.get("entity") or c.get("host"):
+            hits = host_history(conn, c.get("entity") or c["host"], topic=c.get("topic"), limit=k, layout=layout)
         else:
             hits = search(conn, c["q"], k=k, layout=layout)
         flags, clean = self_quote_check(hits, c["q"], c["expect"], doc_text)
