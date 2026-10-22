@@ -2,8 +2,8 @@
 exclude = ["**/_template.md"]
 dated_filename_types = ["journal"] # a YYYY-MM-DD in the filename is the doc date
 history_types = ["journal", "host"]
-# canonical = ["host", "runbook"]  # types the "when sources disagree" rule names as canonical; default: every type
-                                  # boosted above 1.0 (set it when a boosted type is not canonical, e.g. lessons)
+canonical = ["host", "runbook"]    # types the "when sources disagree" rule names as canonical (wording only, not
+                                   # ranking); unset = every type boosted above 1.0. memory is boosted but not canonical
 
 layers = [                         # first match wins; only *.md files are ever indexed
   { glob = "journal/**",        type = "journal" },

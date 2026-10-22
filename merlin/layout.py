@@ -20,8 +20,8 @@ DEFAULT_TOML = r"""
 exclude = ["**/_template.md"]
 dated_filename_types = ["journal"] # a YYYY-MM-DD in the filename is the doc date
 history_types = ["journal", "host"]
-# canonical = ["host", "runbook"]  # types the "when sources disagree" rule names as canonical; default: every type
-                                  # boosted above 1.0 (set it when a boosted type is not canonical, e.g. lessons)
+canonical = ["host", "runbook"]    # types the "when sources disagree" rule names as canonical (wording only, not
+                                   # ranking); unset = every type boosted above 1.0. memory is boosted but not canonical
 
 layers = [                         # first match wins; only *.md files are ever indexed
   { glob = "journal/**",        type = "journal" },
@@ -137,6 +137,8 @@ class Layout:
         name = str(ent.get("name", "host"))
         if not re.fullmatch(r"[a-z][a-z0-9_]*", name):
             raise ValueError(f"[entities] name must be a lowercase identifier, got {name!r}")
+        if not isinstance(d.get("canonical", []), list):
+            raise ValueError(f"canonical must be a list of doc types, got {d['canonical']!r}")
         unknown = set(map(str, d.get("canonical", []))) - {str(l["type"]) for l in d.get("layers", [])}
         if unknown:
             raise ValueError(f"canonical names types no layer defines: {sorted(unknown)}")

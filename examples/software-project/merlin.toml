@@ -3,6 +3,7 @@
 exclude = ["**/_template.md"]
 dated_filename_types = ["journal"]
 history_types = ["journal", "component", "decision"]
+canonical = ["component", "howto", "decision"]   # what "the more canonical source" means; lessons are boosted, not canonical
 
 layers = [
   { glob = "journal/**",        type = "journal" },

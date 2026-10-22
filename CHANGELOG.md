@@ -11,7 +11,8 @@
   a hardcoded host/runbook.
 - **`canonical`** (top-level layout key) names the types that rule calls canonical, when that differs from the
   boosted ones: a boosted type isn't always canonical (lessons can rank high and still go stale). It only changes
-  the instruction text, not ranking. An unknown type is an error.
+  the instruction text, not ranking. An unknown type is an error. The shipped default sets `["host", "runbook"]`
+  (memory is boosted, not canonical), and each example sets its own.
 - **The session loop** (README): how the record stays current (look up first, journal with real output, update
   the canonical layers, handoff, retrieval retrospective, commit), plus a generic wrap-up skill in
   `examples/skills/wrapup/`.

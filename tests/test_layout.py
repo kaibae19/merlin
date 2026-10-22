@@ -56,8 +56,9 @@ def test_example_config_is_the_default(layout):
     from pathlib import Path
     example = Layout.from_toml((Path(__file__).parent.parent / "merlin.example.toml").read_text())
     assert example.weights == layout.weights and example.history_types == layout.history_types
-    assert (example.entity_name, example.entity_key, example.entity_alias_fields, example.host_types) == \
-        (layout.entity_name, layout.entity_key, layout.entity_alias_fields, layout.host_types)
+    assert (example.entity_name, example.entity_key, example.entity_alias_fields, example.host_types,
+            example.canonical_types) == (layout.entity_name, layout.entity_key, layout.entity_alias_fields,
+                                         layout.host_types, layout.canonical_types)
     assert [(rx.pattern, t) for rx, t in example.layers] == [(rx.pattern, t) for rx, t in layout.layers]
 
 
@@ -148,10 +149,13 @@ def test_example_layouts_parse(example):
     assert t.layers and set(t.host_types) <= {ty for _, ty in t.layers}       # entity records are an indexed type
     assert set(t.history_types) <= {ty for _, ty in t.layers}
     assert set(t.weights) == {ty for _, ty in t.layers}                       # every type tells the model how to weigh it
+    assert t.canonical_types                                                  # each example says what is canonical
 
 
 def test_prefer_text_follows_boost(layout):
-    assert "(host/runbook/memory over an old journal entry)" in layout.prefer_text()
+    assert "(host/runbook over an old journal entry)" in layout.prefer_text()     # memory: boosted, not canonical
+    assert "(host/runbook/memory over an old journal entry)" in Layout.from_toml(
+        'dated_filename_types = ["journal"]\n[boost]\nhost = 1.3\nrunbook = 1.3\nmemory = 1.3').prefer_text()
     t = Layout.from_toml('dated_filename_types = ["journal"]\n[boost]\ntopic = 1.3\nsource = 1.2\njournal = 1.0')
     assert "(topic/source over an old journal entry)" in t.prefer_text()
     assert Layout.from_toml("[boost]\njournal = 1.0").prefer_text() == \
@@ -159,7 +163,8 @@ def test_prefer_text_follows_boost(layout):
 
 
 def test_canonical_overrides_boost(layout):
-    assert layout.canonical_types is None                                     # default: the boosted types
+    assert layout.canonical_types == ("host", "runbook")                      # the shipped default names them
+    assert Layout.from_toml("[boost]\nhost = 1.3").canonical_types is None    # unset: the boosted types
     t = Layout.from_toml('canonical = ["host", "runbook"]\nlayers = [{ glob = "j/**", type = "journal" }, '
                          '{ glob = "h/*.md", type = "host" }, { glob = "r/**", type = "runbook" }, '
                          '{ glob = "m/*.md", type = "memory" }]\n[boost]\nhost = 1.3\nrunbook = 1.3\nmemory = 1.3')
@@ -167,5 +172,7 @@ def test_canonical_overrides_boost(layout):
     assert t.boost["memory"] == 1.3                                           # ranking is unchanged
     none = Layout.from_toml('canonical = []\nlayers = [{ glob = "h/*.md", type = "host" }]\n[boost]\nhost = 1.3')
     assert none.prefer_text() == "When sources disagree, prefer the newer and the more canonical, and say so."
+    with pytest.raises(ValueError, match="must be a list"):
+        Layout.from_toml('canonical = "host"\nlayers = [{ glob = "h/*.md", type = "host" }]')
     with pytest.raises(ValueError, match="hosts"):
         Layout.from_toml('canonical = ["hosts"]\nlayers = [{ glob = "h/*.md", type = "host" }]')

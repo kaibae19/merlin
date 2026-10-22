@@ -3,6 +3,7 @@
 exclude = ["**/_template.md"]
 dated_filename_types = ["journal"]
 history_types = ["journal", "topic", "lesson", "question"]
+canonical = ["topic", "source"]   # lessons and open questions rank up for search but are not the authority
 
 layers = [
   { glob = "journal/**",        type = "journal" },
