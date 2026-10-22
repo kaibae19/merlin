@@ -156,3 +156,16 @@ def test_prefer_text_follows_boost(layout):
     assert "(topic/source over an old journal entry)" in t.prefer_text()
     assert Layout.from_toml("[boost]\njournal = 1.0").prefer_text() == \
         "When sources disagree, prefer the newer and the more canonical, and say so."
+
+
+def test_canonical_overrides_boost(layout):
+    assert layout.canonical_types is None                                     # default: the boosted types
+    t = Layout.from_toml('canonical = ["host", "runbook"]\nlayers = [{ glob = "j/**", type = "journal" }, '
+                         '{ glob = "h/*.md", type = "host" }, { glob = "r/**", type = "runbook" }, '
+                         '{ glob = "m/*.md", type = "memory" }]\n[boost]\nhost = 1.3\nrunbook = 1.3\nmemory = 1.3')
+    assert "(host/runbook over an old journal entry)" in t.prefer_text()     # memory is boosted but not named
+    assert t.boost["memory"] == 1.3                                           # ranking is unchanged
+    none = Layout.from_toml('canonical = []\nlayers = [{ glob = "h/*.md", type = "host" }]\n[boost]\nhost = 1.3')
+    assert none.prefer_text() == "When sources disagree, prefer the newer and the more canonical, and say so."
+    with pytest.raises(ValueError, match="hosts"):
+        Layout.from_toml('canonical = ["hosts"]\nlayers = [{ glob = "h/*.md", type = "host" }]')

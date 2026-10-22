@@ -9,6 +9,9 @@
   `search(host=…)` stay as aliases. Eval cases take `entity:` (`host:` still works).
 - The "prefer the more canonical source" rule in the MCP instructions names the layout's boosted types instead of
   a hardcoded host/runbook.
+- **`canonical`** (top-level layout key) names the types that rule calls canonical, when that differs from the
+  boosted ones: a boosted type isn't always canonical (lessons can rank high and still go stale). It only changes
+  the instruction text, not ranking. An unknown type is an error.
 - **The session loop** (README): how the record stays current (look up first, journal with real output, update
   the canonical layers, handoff, retrieval retrospective, commit), plus a generic wrap-up skill in
   `examples/skills/wrapup/`.

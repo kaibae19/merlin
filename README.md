@@ -185,7 +185,9 @@ the layout file (`merlin.toml`).
    `max(50, 8k)` chunks; RRF scores each chunk `Σ 1/(60 + rank)`.
 2. **Rerank.** Each fused score is multiplied by three factors:
    - **Doc-type boost** (`[boost]`): host, runbook, memory 1.3; journal 1.0; planning 0.9; doc 0.8; skill 0.7;
-     memory-index 0.6. Unlisted types get 1.0.
+     memory-index 0.6. Unlisted types get 1.0. The MCP instructions' "prefer the more canonical source" rule names
+     the boosted types; set the top-level `canonical = [...]` when that should be a different list (e.g. lessons
+     ranked up for search, but not canonical).
    - **Recency** (`[recency]`): `1 + weight · 0.5^(age_days / half_life_days)`, with weight 0.05 and a 30-day half
      life, so a section dated today gets at most +5%. The age uses the section's date, else the document's. It is a
      tiebreak, not a sort.
