@@ -24,7 +24,8 @@ The shipped layout is for infrastructure (the entity is a *host*: journal, host 
 it came from. The layout is configuration: [examples/](examples/) has an [Anna](examples/anna/) record, a software project
 (components, decisions) and a learning record (topics, lessons, open questions).
 
-merlin grew out of the memory engine of Anna, a personal assistant project.
+merlin grew out of the memory engine of [Anna](https://github.com/kaibae19/anna), a scaffold for a personal agent
+built on Claude Code.
 
 **Principle: the files are canonical, and the index is derived.** Every row can be rebuilt from git at any time.
 Nothing is ever written only to the database: no notes, no edits, no state you would miss if you dropped it.

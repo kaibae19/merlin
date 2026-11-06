@@ -1,6 +1,6 @@
 # Example layout: an Anna record
 
-For the record of an assistant built from the Anna scaffold: a personal agent that keeps its memory as a git repo of
+For the record of an assistant built from the [Anna scaffold](https://github.com/kaibae19/anna): a personal agent that keeps its memory as a git repo of
 plain Markdown. merlin grew out of Anna's memory engine, so this is the layout it was tuned on. The entity is a
 **host** (a machine or device), and Anna's engines call `host_history` before touching one.
 
