@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Quick start:** `deploy/compose.yaml` + `.env.example` run Postgres + pgvector, a CPU TEI (memory-bounded) and
+  merlin on one machine; the README is now a front door (quick start, connecting Claude Code, keeping it fresh,
+  layouts) and the full reference moved to `docs/reference.md`.
+- **`examples/anna/`:** a layout for the record of an Anna assistant (host entity, `bot/context/` as current
+  practice, handoffs left out of `history`).
 - **Entities** generalize hosts: `[entities]` sets what the record's things are called (`name`), which doc types
   define them, the front matter key and alias fields. The default stays `host` with `aliases` + `ips`; the old
   top-level `host_types` and `[hosts] text_ignore` still load.

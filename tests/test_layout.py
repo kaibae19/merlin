@@ -140,7 +140,7 @@ EXAMPLES = sorted((Path(__file__).parent.parent / "examples").glob("*/merlin.tom
 
 
 def test_example_layouts_exist():
-    assert {p.parent.name for p in EXAMPLES} >= {"software-project", "learning"}   # not lost to an ignore rule
+    assert {p.parent.name for p in EXAMPLES} >= {"software-project", "learning", "anna"}   # not lost to an ignore rule
 
 
 @pytest.mark.parametrize("example", EXAMPLES, ids=lambda p: p.parent.name)
